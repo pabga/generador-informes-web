@@ -5,8 +5,9 @@ import io
 from datetime import datetime
 import gspread
 
-# --- FUNCIÓN PARA CREAR UNA TABLA (LA REUTILIZAREMOS) ---
+# --- FUNCIÓN PARA CREAR UNA TABLA (REUTILIZABLE) ---
 def crear_tabla_en_documento(documento, marcador_tabla, dataframe_personas):
+    # (Esta función no cambia, es la misma de antes)
     parrafo_marcador = None
     for p in documento.paragraphs:
         if marcador_tabla in p.text:
@@ -40,42 +41,35 @@ def crear_tabla_en_documento(documento, marcador_tabla, dataframe_personas):
     else:
         st.warning(f"ADVERTENCIA: No se encontró el marcador {marcador_tabla} en la plantilla.")
 
-# --- CONFIGURACIÓN Y CONEXIÓN SEGURA A GOOGLE SHEETS ---
+# --- CONEXIÓN A GOOGLE SHEETS (NO CAMBIA) ---
 try:
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-
     sh_personas = gc.open("Base de Datos - Personas").sheet1
-    sh_docentes = gc.open("Base de Datos - Docentes").sheet1 # <-- NUEVA HOJA
+    sh_docentes = gc.open("Base de Datos - Docentes").sheet1
     sh_cursos = gc.open("Base de Datos - Cursos").sheet1
-
     df_personas_full = pd.DataFrame(sh_personas.get_all_records())
-    df_docentes_full = pd.DataFrame(sh_docentes.get_all_records()) # <-- NUEVO DATAFRAME
+    df_docentes_full = pd.DataFrame(sh_docentes.get_all_records())
     df_cursos = pd.DataFrame(sh_cursos.get_all_records())
-
     df_personas_full['DNI'] = df_personas_full['DNI'].astype(str)
-    df_docentes_full['DNI'] = df_docentes_full['DNI'].astype(str) # <-- NUEVO DATAFRAME
-
+    df_docentes_full['DNI'] = df_docentes_full['DNI'].astype(str)
 except Exception as e:
-    st.error(f"Error al conectar con Google Sheets. Verifica la configuración de API, los Secrets y que todas las hojas estén compartidas: {e}")
+    st.error(f"Error al conectar con Google Sheets: {e}")
     st.stop()
 
-# --- FUNCIÓN PRINCIPAL QUE GENERA EL DOCUMENTO ---
-def generar_documento(curso_elegido_df, dnis_participantes):
-    # Filtrar participantes
+# --- FUNCIÓN PRINCIPAL (AHORA RECIBE EL NOMBRE DE LA PLANTILLA) ---
+def generar_documento(curso_elegido_df, dnis_participantes, plantilla_a_usar): # <-- PARÁMETRO NUEVO
     participantes_df = df_personas_full[df_personas_full['DNI'].isin(dnis_participantes)]
-    st.info(f"Se encontraron {len(participantes_df)} de {len(dnis_participantes)} participantes en la base de datos.")
+    st.info(f"Se encontraron {len(participantes_df)} de {len(dnis_participantes)} participantes.")
 
-    # Filtrar docentes
     dnis_docentes_str = str(curso_elegido_df.get('DNI_Docentes', ''))
     dnis_docentes = [dni.strip() for dni in dnis_docentes_str.split(',') if dni.strip()]
     docentes_df = df_docentes_full[df_docentes_full['DNI'].isin(dnis_docentes)]
     st.info(f"Se encontraron {len(docentes_df)} docentes para este curso.")
 
-    documento = Document('plantilla.docx')
+    documento = Document(plantilla_a_usar) # <-- USA LA PLANTILLA SELECCIONADA
     
-    # Reemplazar marcadores del curso y otros datos
+    # El resto de la lógica de reemplazo es la misma
     datos_completos = curso_elegido_df.to_dict()
-    # (El resto de la lógica de reemplazo de texto es la misma)
     todos_los_parrafos = list(documento.paragraphs)
     for tabla in documento.tables:
         for row in tabla.rows:
@@ -103,24 +97,41 @@ def generar_documento(curso_elegido_df, dnis_participantes):
     buffer.seek(0)
     return buffer
 
-# --- INTERFAZ DE LA PÁGINA WEB ---
+# --- INTERFAZ DE LA PÁGINA WEB (CON EL "SWITCH") ---
 st.title("Generador de Informes de Cursos 🚀")
 
+# --- NUEVO: DICCIONARIO DE PLANTILLAS ---
+# Aquí definís un nombre amigable y el nombre real del archivo.
+plantillas_disponibles = {
+    "Informe Detallado (con tablas)": "informe_detallado.docx",
+    "Memo Resumido (solo texto)": "memo_resumen.docx"
+}
+
+# --- NUEVO: MENÚ DESPLEGABLE PARA ELEGIR LA PLANTILLA ---
+opcion_plantilla_display = st.selectbox(
+    "Paso 1: Seleccione el tipo de documento",
+    list(plantillas_disponibles.keys())
+)
+# Obtenemos el nombre de archivo real a partir de la opción elegida
+plantilla_seleccionada_archivo = plantillas_disponibles[opcion_plantilla_display]
+
+
 lista_cursos = df_cursos['Nombre_Curso'].tolist()
-curso_seleccionado_nombre = st.selectbox("Paso 1: Seleccione el curso", lista_cursos)
-archivo_dni_subido = st.file_uploader("Paso 2: Suba el archivo `lista_dni.txt` con los DNI de los **participantes**", type="txt")
+curso_seleccionado_nombre = st.selectbox("Paso 2: Seleccione el curso", lista_cursos)
+archivo_dni_subido = st.file_uploader("Paso 3: Suba el archivo `lista_dni.txt` con los DNI de los participantes", type="txt")
 
 if st.button("Generar Documento"):
     if archivo_dni_subido is not None:
         with st.spinner('Procesando...'):
             dnis = archivo_dni_subido.getvalue().decode("utf-8").splitlines()
             dnis_limpios = [dni.strip() for dni in dnis if dni.strip()]
-
             curso_elegido_df = df_cursos[df_cursos['Nombre_Curso'] == curso_seleccionado_nombre].iloc[0]
-            buffer_documento = generar_documento(curso_elegido_df, dnis_limpios)
+            
+            # --- NUEVO: PASAMOS LA PLANTILLA SELECCIONADA A LA FUNCIÓN ---
+            buffer_documento = generar_documento(curso_elegido_df, dnis_limpios, plantilla_seleccionada_archivo)
 
             nombre_curso_corto = curso_seleccionado_nombre.replace(" ", "_")[:20]
-            nombre_archivo = f"Informe_{nombre_curso_corto}_{datetime.now().strftime('%Y-%m-%d')}.docx"
+            nombre_archivo = f"{opcion_plantilla_display.split(' ')[0]}_{nombre_curso_corto}_{datetime.now().strftime('%Y-%m-%d')}.docx"
             
             st.success("¡Documento generado con éxito!")
             st.download_button(
