@@ -128,7 +128,7 @@ archivo_dni_subido = st.file_uploader("Paso 3: Suba el archivo `lista_dni.txt` c
 # --- NUEVO: CAMPO DE TEXTO PARA CONTENIDO MANUAL ---
 st.markdown("---")  # Una línea para separar
 texto_adicional = st.text_area(
-    "Paso 4 (Opcional): Agregue texto personalizado para el marcador {{S_D}}",
+    "Paso 4 (Opcional): Agregue texto ej 000000/AGO/25",
     height=150  # Altura del cuadro de texto
 )
 
