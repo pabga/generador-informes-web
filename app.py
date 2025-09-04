@@ -103,9 +103,9 @@ st.title("Generador de Informes de Cursos 🚀")
 # --- NUEVO: DICCIONARIO DE PLANTILLAS ---
 # Aquí definís un nombre amigable y el nombre real del archivo.
 plantillas_disponibles = {
-    "memo Detallado (con tablas)": "memo_detallado.docx",
-    "Memo Resumido (solo texto)": "memo_resumen.docx",
-    "Convocatoria Oficial": "convocatoria_oficial.docx"
+    "Memo Autogestionado": "memo_autogestionado.docx",
+    "Memo Autogestionado (con clase)": "memo_autogestionado_con_clase.docx",
+    "Memo Extensión": "memo_extension.docx"
 }
 
 # --- NUEVO: MENÚ DESPLEGABLE PARA ELEGIR LA PLANTILLA ---
