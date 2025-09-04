@@ -103,8 +103,9 @@ st.title("Generador de Informes de Cursos 🚀")
 # --- NUEVO: DICCIONARIO DE PLANTILLAS ---
 # Aquí definís un nombre amigable y el nombre real del archivo.
 plantillas_disponibles = {
-    "Informe Detallado (con tablas)": "informe_detallado.docx",
-    "Memo Resumido (solo texto)": "memo_resumen.docx"
+    "memo Detallado (con tablas)": "memo_detallado.docx",
+    "Memo Resumido (solo texto)": "memo_resumen.docx",
+    "Convocatoria Oficial": "convocatoria_oficial.docx"
 }
 
 # --- NUEVO: MENÚ DESPLEGABLE PARA ELEGIR LA PLANTILLA ---
