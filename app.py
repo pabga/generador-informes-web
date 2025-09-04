@@ -5,35 +5,77 @@ import io
 from datetime import datetime
 import gspread
 
+# --- FUNCIÓN PARA CREAR UNA TABLA (LA REUTILIZAREMOS) ---
+def crear_tabla_en_documento(documento, marcador_tabla, dataframe_personas):
+    parrafo_marcador = None
+    for p in documento.paragraphs:
+        if marcador_tabla in p.text:
+            parrafo_marcador = p
+            break
+
+    if parrafo_marcador:
+        parrafo_marcador.text = ""
+        tabla = documento.add_table(rows=1, cols=3)
+        try:
+            tabla.style = 'Tabla con cuadrícula'
+        except KeyError:
+            try:
+                tabla.style = 'Table Grid'
+            except KeyError:
+                st.warning(f"Estilo de tabla no encontrado para {marcador_tabla}.")
+                pass
+        
+        hdr_cells = tabla.rows[0].cells
+        hdr_cells[0].text = 'Jerarquía'
+        hdr_cells[1].text = 'DNI'
+        hdr_cells[2].text = 'Nombre y Apellido'
+        
+        for index, persona in dataframe_personas.iterrows():
+            row_cells = tabla.add_row().cells
+            row_cells[0].text = str(persona.get('Jerarquia', ''))
+            row_cells[1].text = str(persona.get('DNI', ''))
+            row_cells[2].text = str(persona.get('Nombre_Apellido', ''))
+        
+        parrafo_marcador._p.addnext(tabla._element)
+    else:
+        st.warning(f"ADVERTENCIA: No se encontró el marcador {marcador_tabla} en la plantilla.")
+
 # --- CONFIGURACIÓN Y CONEXIÓN SEGURA A GOOGLE SHEETS ---
 try:
-    # Autenticación usando los "Secrets" de Streamlit
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
 
-    # Abrir las hojas de cálculo por su nombre
     sh_personas = gc.open("Base de Datos - Personas").sheet1
+    sh_docentes = gc.open("Base de Datos - Docentes").sheet1 # <-- NUEVA HOJA
     sh_cursos = gc.open("Base de Datos - Cursos").sheet1
 
-    # Convertir los datos a DataFrames de Pandas
     df_personas_full = pd.DataFrame(sh_personas.get_all_records())
+    df_docentes_full = pd.DataFrame(sh_docentes.get_all_records()) # <-- NUEVO DATAFRAME
     df_cursos = pd.DataFrame(sh_cursos.get_all_records())
 
-    # Asegurarse de que DNI sea texto para las comparaciones
     df_personas_full['DNI'] = df_personas_full['DNI'].astype(str)
+    df_docentes_full['DNI'] = df_docentes_full['DNI'].astype(str) # <-- NUEVO DATAFRAME
 
 except Exception as e:
-    st.error(f"Error al conectar con Google Sheets. Verifica la configuración de API y los Secrets: {e}")
-    st.stop() # Detiene la ejecución si no se puede conectar
+    st.error(f"Error al conectar con Google Sheets. Verifica la configuración de API, los Secrets y que todas las hojas estén compartidas: {e}")
+    st.stop()
 
 # --- FUNCIÓN PRINCIPAL QUE GENERA EL DOCUMENTO ---
-def generar_documento(curso_elegido_df, dnis_a_procesar):
-    cursantes_df = df_personas_full[df_personas_full['DNI'].isin(dnis_a_procesar)]
-    st.info(f"Se encontraron {len(cursantes_df)} de {len(dnis_a_procesar)} DNI en la base de datos.")
+def generar_documento(curso_elegido_df, dnis_participantes):
+    # Filtrar participantes
+    participantes_df = df_personas_full[df_personas_full['DNI'].isin(dnis_participantes)]
+    st.info(f"Se encontraron {len(participantes_df)} de {len(dnis_participantes)} participantes en la base de datos.")
+
+    # Filtrar docentes
+    dnis_docentes_str = str(curso_elegido_df.get('DNI_Docentes', ''))
+    dnis_docentes = [dni.strip() for dni in dnis_docentes_str.split(',') if dni.strip()]
+    docentes_df = df_docentes_full[df_docentes_full['DNI'].isin(dnis_docentes)]
+    st.info(f"Se encontraron {len(docentes_df)} docentes para este curso.")
 
     documento = Document('plantilla.docx')
     
     # Reemplazar marcadores del curso y otros datos
     datos_completos = curso_elegido_df.to_dict()
+    # (El resto de la lógica de reemplazo de texto es la misma)
     todos_los_parrafos = list(documento.paragraphs)
     for tabla in documento.tables:
         for row in tabla.rows:
@@ -47,43 +89,14 @@ def generar_documento(curso_elegido_df, dnis_a_procesar):
             if marcador in parrafo.text:
                 dato_a_reemplazar = ''
                 if key in ['Fecha_Inicio', 'Fecha_Fin'] and pd.notna(value) and value != '':
-                    try:
-                        dato_a_reemplazar = pd.to_datetime(value).strftime('%d/%m/%Y')
-                    except (ValueError, TypeError):
-                        dato_a_reemplazar = str(value) # Si no es una fecha válida, lo dejamos como está
-                else:
-                    dato_a_reemplazar = str(value)
+                    try: dato_a_reemplazar = pd.to_datetime(value).strftime('%d/%m/%Y')
+                    except (ValueError, TypeError): dato_a_reemplazar = str(value)
+                else: dato_a_reemplazar = str(value)
                 parrafo.text = parrafo.text.replace(marcador, dato_a_reemplazar)
     
-    # Encontrar el marcador de la tabla e insertarla
-    parrafo_marcador = None
-    for p in documento.paragraphs:
-        if '{{TABLA_PARTICIPANTES}}' in p.text:
-            parrafo_marcador = p
-            break
-
-    if parrafo_marcador:
-        parrafo_marcador.text = ""
-        tabla = documento.add_table(rows=1, cols=3)
-        try: tabla.style = 'Tabla con cuadrícula'
-        except KeyError:
-            try: tabla.style = 'Table Grid'
-            except KeyError: st.warning("Estilo de tabla no encontrado.")
-        
-        hdr_cells = tabla.rows[0].cells
-        hdr_cells[0].text = 'Jerarquía'
-        hdr_cells[1].text = 'DNI'
-        hdr_cells[2].text = 'Nombre y Apellido'
-        
-        for index, persona in cursantes_df.iterrows():
-            row_cells = tabla.add_row().cells
-            row_cells[0].text = str(persona.get('Jerarquia', ''))
-            row_cells[1].text = str(persona.get('DNI', ''))
-            row_cells[2].text = str(persona.get('Nombre_Apellido', ''))
-        
-        parrafo_marcador._p.addnext(tabla._element)
-    else:
-        st.warning("ADVERTENCIA: No se encontró el marcador {{TABLA_PARTICIPANTES}} en la plantilla.")
+    # Crear ambas tablas usando la función reutilizable
+    crear_tabla_en_documento(documento, '{{TABLA_PARTICIPANTES}}', participantes_df)
+    crear_tabla_en_documento(documento, '{{TABLA_DOCENTES}}', docentes_df)
 
     buffer = io.BytesIO()
     documento.save(buffer)
@@ -95,7 +108,7 @@ st.title("Generador de Informes de Cursos 🚀")
 
 lista_cursos = df_cursos['Nombre_Curso'].tolist()
 curso_seleccionado_nombre = st.selectbox("Paso 1: Seleccione el curso", lista_cursos)
-archivo_dni_subido = st.file_uploader("Paso 2: Suba el archivo `lista_dni.txt`", type="txt")
+archivo_dni_subido = st.file_uploader("Paso 2: Suba el archivo `lista_dni.txt` con los DNI de los **participantes**", type="txt")
 
 if st.button("Generar Documento"):
     if archivo_dni_subido is not None:
