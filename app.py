@@ -110,8 +110,9 @@ def generar_documento(curso_elegido_df, dnis_participantes, plantilla_a_usar, te
 st.title("Generador de Informes de Cursos 🚀")
 
 plantillas_disponibles = {
-    "Informe Detallado (con tablas)": "informe_detallado.docx",
-    "Memo Resumido (solo texto)": "memo_resumen.docx"
+    "Memo Autogestionado": "memo_autogestionado.docx",
+    "Memo Autogestionado (con clase)": "memo_autogestionado_con_clase.docx",
+    "Memo Extension" : "memo_extension.docx"
 }
 opcion_plantilla_display = st.selectbox(
     "Paso 1: Seleccione el tipo de documento",

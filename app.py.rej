@@ -1,0 +1,9 @@
+diff a/app.py b/app.py	(rejected hunks)
+@@ -103,6 +103,7 @@
+ # --- NUEVO: DICCIONARIO DE PLANTILLAS ---
+ # Aquí definís un nombre amigable y el nombre real del archivo.
+ plantillas_disponibles = {
++    "Memo Autogestionado": "memo_autogestionado.docx",
+     "Memo Autogestionado (con clase)": "memo_autogestionado_con_clase.docx",
+     "Memo Extensión": "memo_extension.docx"
+ }
